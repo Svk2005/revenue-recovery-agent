@@ -13,7 +13,7 @@ Run with (from the project root, not inside backend/):
 from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
 
-from data.generate_data import make_checkout
+from data.generate_data import make_checkout, new_run_id
 from agent.orchestrator import run_batch
 
 app = FastAPI(title="Revenue Recovery Agent API")
@@ -34,7 +34,8 @@ def _serialize(trail, stats):
 
 @app.post("/api/run")
 def run(n: int = Query(default=40, ge=5, le=200)):
-    checkouts = [make_checkout(i) for i in range(n)]
+    run_id = new_run_id()
+    checkouts = [make_checkout(i, run_id=run_id) for i in range(n)]
     trail, stats = run_batch(checkouts)
     result = _serialize(trail, stats)
     global _last_result

@@ -14,9 +14,8 @@ Run: python data/generate_data.py --n 40 --out data/checkouts.json
 import argparse
 import json
 import random
+import time
 from datetime import datetime, timedelta
-
-random.seed(42)
 
 FIRST_NAMES = ["Aarav", "Priya", "Rohan", "Sneha", "Vikram", "Ananya", "Karan",
                "Ishita", "Rahul", "Meera", "Arjun", "Divya", "Nikhil", "Pooja",
@@ -46,11 +45,23 @@ RAZORPAY_FAILURE_REASONS = [
 LANGUAGE_PREF = ["en", "hi-en"]  # hi-en = Hinglish
 
 
+def new_run_id() -> str:
+    """
+    A short, unique-per-run id (based on current time) used to prefix
+    checkout_id values. Without this, repeated runs would generate the
+    same CO-1000, CO-1001... ids every time, which collide with
+    Razorpay's Payment Links `reference_id` field on a second attempt
+    (each reference_id must be unique) and silently fall back to a
+    mock link. This keeps every run's checkouts genuinely unique.
+    """
+    return format(int(time.time() * 1000) % 1_000_000, "06d")
+
+
 def random_time_recent(max_hours_ago=72):
     return (datetime.now() - timedelta(hours=random.uniform(0.5, max_hours_ago))).isoformat()
 
 
-def make_checkout(idx):
+def make_checkout(idx, run_id: str = ""):
     name = f"{random.choice(FIRST_NAMES)} {random.choice(LAST_NAMES)}"
     cart_value = round(random.choice([149, 299, 499, 899, 1299, 2499, 4999, 9999, 14999]) *
                         random.uniform(0.9, 1.1), 2)
@@ -66,8 +77,10 @@ def make_checkout(idx):
     # (feeds the "don't over-contact" policy rule)
     prior_contacts_24h = random.choices([0, 0, 0, 1, 2], weights=[60, 15, 10, 10, 5])[0]
 
+    checkout_id = f"CO-{run_id}-{1000 + idx}" if run_id else f"CO-{1000 + idx}"
+
     return {
-        "checkout_id": f"CO-{1000 + idx}",
+        "checkout_id": checkout_id,
         "customer_name": name,
         "phone": phone,
         "cart_value_inr": cart_value,
@@ -85,12 +98,18 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--n", type=int, default=40)
     ap.add_argument("--out", type=str, default="data/checkouts.json")
+    ap.add_argument("--seed", type=int, default=None,
+                     help="Optional: fix the random seed for reproducible output.")
     args = ap.parse_args()
 
-    records = [make_checkout(i) for i in range(args.n)]
+    if args.seed is not None:
+        random.seed(args.seed)
+
+    run_id = new_run_id()
+    records = [make_checkout(i, run_id=run_id) for i in range(args.n)]
     with open(args.out, "w") as f:
         json.dump(records, f, indent=2)
-    print(f"Wrote {len(records)} synthetic checkouts to {args.out}")
+    print(f"Wrote {len(records)} synthetic checkouts to {args.out} (run_id={run_id})")
 
 
 if __name__ == "__main__":
