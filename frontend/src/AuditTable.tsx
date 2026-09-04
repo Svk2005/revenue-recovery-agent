@@ -94,6 +94,9 @@ export function AuditTable({ rows }: { rows: AuditRow[] }) {
                   <div>
                     <span className="text-paper">Diagnosis: </span>
                     {row.diagnosis_explanation}
+                    <span className="text-xs ml-2">
+                      (source: {row.source}, step: {row.step.replace(/_/g, ' ')})
+                    </span>
                   </div>
                   <div>
                     <span className="text-paper">Policy reasoning: </span>
@@ -103,6 +106,15 @@ export function AuditTable({ rows }: { rows: AuditRow[] }) {
                     <div>
                       <span className="text-paper">Message: </span>
                       <span className="font-mono text-xs">{row.message_sent}</span>
+                    </div>
+                  )}
+                  {row.payment_link_id && (
+                    <div>
+                      <span className="text-paper">Payment link: </span>
+                      <span className="font-mono text-xs">{row.payment_link_id}</span>
+                      <span className={`text-xs ml-2 ${row.payment_link_live ? 'text-recovered' : 'text-muted'}`}>
+                        {row.payment_link_live ? '(live Razorpay API)' : '(mock — no API keys configured)'}
+                      </span>
                     </div>
                   )}
                   {row.recovered_value_inr > 0 && (

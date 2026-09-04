@@ -23,6 +23,7 @@ def run_batch(checkouts: list[dict]) -> tuple[AuditTrail, dict]:
         "send_failed_gracefully": 0,
         "recovered_value_inr": 0.0,
         "total_cart_value_inr": 0.0,
+        "live_payment_links_created": 0,
     }
 
     for checkout in checkouts:
@@ -36,6 +37,8 @@ def run_batch(checkouts: list[dict]) -> tuple[AuditTrail, dict]:
             "customer_name": checkout["customer_name"],
             "cart_value_inr": checkout["cart_value_inr"],
             "failure_reason": diagnosis["failure_reason"],
+            "source": diagnosis["source"],
+            "step": diagnosis["step"],
             "recoverability_score": round(diagnosis["recoverability_score"], 2),
             "diagnosis_explanation": diagnosis["explanation"],
             "policy_action": decision["action"],
@@ -44,6 +47,8 @@ def run_batch(checkouts: list[dict]) -> tuple[AuditTrail, dict]:
             "send_outcome": "",
             "message_sent": "",
             "recovered_value_inr": 0,
+            "payment_link_id": "",
+            "payment_link_live": False,
         }
 
         if decision["action"] == "skip":
@@ -58,6 +63,10 @@ def run_batch(checkouts: list[dict]) -> tuple[AuditTrail, dict]:
             result = send(checkout, decision["action"])
             row["send_outcome"] = result["outcome"]
             row["message_sent"] = result["message"]
+            row["payment_link_id"] = result.get("payment_link_id", "")
+            row["payment_link_live"] = result.get("payment_link_live", False)
+            if row["payment_link_live"]:
+                stats["live_payment_links_created"] += 1
 
             if result["outcome"] == "sent":
                 stats["sent"] += 1

@@ -2,6 +2,13 @@
 Generates a synthetic batch of abandoned UPI/card checkouts for the
 Razorpay Revenue Recovery Agent to process.
 
+Every failure_reason value here is a REAL, documented Razorpay error
+`reason` (see razorpay.com/docs/payment-gateway/rainy-day/errors/) --
+not an invented category. source/step are the matching real fields
+Razorpay's API returns alongside each reason. This lets the rest of
+the pipeline (agent/diagnose.py) work against Razorpay's authentic
+error taxonomy even when running on synthetic checkout data.
+
 Run: python data/generate_data.py --n 40 --out data/checkouts.json
 """
 import argparse
@@ -17,28 +24,37 @@ FIRST_NAMES = ["Aarav", "Priya", "Rohan", "Sneha", "Vikram", "Ananya", "Karan",
 LAST_NAMES = ["Sharma", "Verma", "Iyer", "Reddy", "Nair", "Gupta", "Singh",
               "Patel", "Kulkarni", "Das", "Mehta", "Rao", "Joshi", "Kapoor"]
 
-# UPI-specific failure reasons — NOT generic "payment failed"
-UPI_FAILURE_REASONS = [
-    "bank_server_timeout",     # NPCI/bank rail was slow — often auto-recoverable
-    "insufficient_balance",    # genuinely can't pay right now
-    "wrong_vpa_entered",       # user typo — needs a corrected link, not a nudge
-    "upi_app_crash",           # app-side issue — retry usually works
-    "otp_not_received",        # network/SMS delay — retry usually works
-    "daily_limit_exceeded",    # bank-side cap — needs next-day retry, not today
-    "user_cancelled_mid_flow", # changed their mind — low recovery odds
-    "network_drop",            # connectivity issue — retry usually works
+# (reason, source, step) -- all three are real values from Razorpay's
+# documented error schema, matched to the profiles in agent/diagnose.py.
+RAZORPAY_FAILURE_REASONS = [
+    ("bank_technical_error", "bank", "payment_authorization"),
+    ("gateway_technical_error", "gateway", "payment_authorization"),
+    ("issuer_technical_error", "bank", "payment_authorization"),
+    ("upi_app_technical_error", "gateway", "payment_authorization"),
+    ("payment_session_expired", "customer", "payment_initiation"),
+    ("payment_collect_request_expired", "customer", "payment_authentication"),
+    ("incorrect_otp", "customer", "payment_authentication"),
+    ("otp_expired", "customer", "payment_authentication"),
+    ("invalid_vpa", "customer", "payment_initiation"),
+    ("insufficient_funds", "customer", "payment_authorization"),
+    ("transaction_daily_limit_exceeded", "bank", "payment_authorization"),
+    ("card_declined", "bank", "payment_authorization"),
+    ("payment_cancelled", "customer", "payment_authentication"),
+    ("payment_declined", "bank", "payment_authorization"),
 ]
 
 LANGUAGE_PREF = ["en", "hi-en"]  # hi-en = Hinglish
 
+
 def random_time_recent(max_hours_ago=72):
     return (datetime.now() - timedelta(hours=random.uniform(0.5, max_hours_ago))).isoformat()
+
 
 def make_checkout(idx):
     name = f"{random.choice(FIRST_NAMES)} {random.choice(LAST_NAMES)}"
     cart_value = round(random.choice([149, 299, 499, 899, 1299, 2499, 4999, 9999, 14999]) *
                         random.uniform(0.9, 1.1), 2)
-    reason = random.choice(UPI_FAILURE_REASONS)
+    reason, source, step = random.choice(RAZORPAY_FAILURE_REASONS)
     lang = random.choice(LANGUAGE_PREF)
 
     # ~15% of records have a broken contact -> forces the agent to hit
@@ -56,11 +72,14 @@ def make_checkout(idx):
         "phone": phone,
         "cart_value_inr": cart_value,
         "failure_reason": reason,
+        "source": source,
+        "step": step,
         "language_pref": lang,
         "abandoned_at": random_time_recent(),
         "prior_contacts_24h": prior_contacts_24h,
         "payment_method": random.choice(["UPI", "UPI", "UPI", "Card"]),  # skew UPI, matches track focus
     }
+
 
 def main():
     ap = argparse.ArgumentParser()
@@ -72,6 +91,7 @@ def main():
     with open(args.out, "w") as f:
         json.dump(records, f, indent=2)
     print(f"Wrote {len(records)} synthetic checkouts to {args.out}")
+
 
 if __name__ == "__main__":
     main()

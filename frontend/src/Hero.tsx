@@ -35,6 +35,11 @@ export function Hero({ stats }: { stats: BatchStats }) {
         <Stat label="Handled failures" value={stats.send_failed_gracefully} accent="failed" />
         <Stat label="Routed to human" value={stats.human_review} accent="pending" />
         <Stat label="Skipped (contact cap)" value={stats.skipped_contact_cap} />
+        <Stat
+          label={stats.live_payment_links_created > 0 ? "Live Razorpay links created" : "Payment links (mock mode)"}
+          value={stats.live_payment_links_created}
+          accent={stats.live_payment_links_created > 0 ? "recovered" : undefined}
+        />
       </div>
     </div>
   )

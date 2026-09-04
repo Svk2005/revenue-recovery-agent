@@ -3,13 +3,22 @@ Messenger layer.
 
 Generates the actual outreach message (English or Hinglish depending on
 customer preference) and "sends" it via a mocked WhatsApp/SMS send call
-that stands in for Razorpay Magic / a WhatsApp Business API integration.
+(a real integration would use the WhatsApp Business API here -- that
+part is out of scope for this build, but the recovery LINK inside the
+message is real: see agent/razorpay_client.py).
 
-This is also where we deliberately let ONE realistic failure mode happen
-(invalid phone number) and prove the agent catches it gracefully instead
-of crashing -- per the track's explicit requirement to "show one failure
-handled gracefully."
+If RAZORPAY_KEY_ID / RAZORPAY_KEY_SECRET are configured, the link in
+the message is a genuine Razorpay test-mode Payment Link (a real
+plink_... id, clickable and payable in Razorpay's sandbox). Without
+credentials, it falls back to a clearly labelled mock link so the
+pipeline still runs end to end.
+
+This is also where we deliberately let ONE realistic failure mode
+happen (invalid phone number) and prove the agent catches it
+gracefully instead of crashing -- per the track's explicit requirement
+to "show one failure handled gracefully."
 """
+from agent.razorpay_client import create_recovery_link
 
 TEMPLATES = {
     "send_instant_retry_link": {
@@ -32,20 +41,20 @@ class SendError(Exception):
 
 
 def _mock_send_whatsapp(phone: str, message: str):
-    """Stand-in for a real WhatsApp Business / Razorpay Magic send call."""
+    """Stand-in for a real WhatsApp Business API send call."""
     if phone == "INVALID_NUMBER" or not phone.startswith("+91-"):
         raise SendError(f"Invalid destination number: {phone!r}")
-    # In a real integration this would call the WhatsApp/SMS API.
     return {"status": "sent", "channel": "whatsapp", "to": phone}
 
 
-def build_message(checkout: dict, action: str) -> str:
+def build_message(checkout: dict, action: str, link_info: dict) -> str:
     lang = checkout.get("language_pref", "en")
     template = TEMPLATES.get(action, TEMPLATES["send_instant_retry_link"])[lang]
-    fake_link = f"https://rzp.io/recover/{checkout['checkout_id']}"
-    return template.format(name=checkout["customer_name"].split()[0],
-                            value=int(checkout["cart_value_inr"]),
-                            link=fake_link)
+    return template.format(
+        name=checkout["customer_name"].split()[0],
+        value=int(checkout["cart_value_inr"]),
+        link=link_info["short_url"],
+    )
 
 
 def send(checkout: dict, action: str) -> dict:
@@ -54,9 +63,22 @@ def send(checkout: dict, action: str) -> dict:
     reports them so the orchestrator can log a graceful failure instead
     of crashing the batch.
     """
-    message = build_message(checkout, action)
+    link_info = create_recovery_link(checkout)
+    message = build_message(checkout, action, link_info)
     try:
         result = _mock_send_whatsapp(checkout["phone"], message)
-        return {"outcome": "sent", "message": message, "detail": result}
+        return {
+            "outcome": "sent",
+            "message": message,
+            "detail": result,
+            "payment_link_id": link_info["id"],
+            "payment_link_live": link_info["live"],
+        }
     except SendError as e:
-        return {"outcome": "failed_gracefully", "message": message, "detail": str(e)}
+        return {
+            "outcome": "failed_gracefully",
+            "message": message,
+            "detail": str(e),
+            "payment_link_id": link_info["id"],
+            "payment_link_live": link_info["live"],
+        }

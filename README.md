@@ -10,22 +10,51 @@ including one failure it handled gracefully instead of crashing.
 Most abandoned-checkout bots treat every failure the same. This agent
 doesn't:
 
-1. **Failure-specific diagnosis** — `bank_server_timeout`, `insufficient_balance`,
-   `wrong_vpa_entered`, `daily_limit_exceeded`, etc. are each diagnosed
-   differently, because the right recovery action is different for each
-   (instant retry vs. corrected link vs. wait-and-retry vs. don't bother).
-2. **Cost-aware policy layer** — never spends more (discount + messaging cost)
+1. **Diagnosis built on Razorpay's real error taxonomy, not invented
+   categories.** Every `failure_reason` value (`bank_technical_error`,
+   `insufficient_funds`, `invalid_vpa`, `payment_cancelled`, etc.) is a
+   real, documented Razorpay error `reason`, paired with the real
+   `source` (customer/bank/gateway) and `step` fields their API actually
+   returns. See [Razorpay's error reasons docs](https://razorpay.com/docs/payment-gateway/rainy-day/errors/error-reasons/).
+   The right recovery action is different for each — instant retry vs.
+   corrected link vs. wait-and-retry vs. don't bother.
+2. **Real Payment Links, not fake URLs.** If Razorpay test-mode API keys
+   are configured, `agent/razorpay_client.py` calls Razorpay's real
+   [Payment Links API](https://razorpay.com/docs/payments/payment-links/)
+   and gets back a genuine `plink_...` id and a clickable, payable
+   test-mode checkout link — not a string we made up. Falls back to a
+   clearly labelled mock link if no credentials are configured, so the
+   pipeline never breaks.
+3. **Cost-aware policy layer** — never spends more (discount + messaging cost)
    recovering a sale than the sale is worth. Explicit, auditable rules, not a
    black box.
-3. **Confidence gate** — low-confidence cases are routed to human review
+4. **Confidence gate** — low-confidence cases are routed to human review
    instead of the agent guessing.
-4. **Contact-frequency cap** — never messages the same customer more than
+5. **Contact-frequency cap** — never messages the same customer more than
    once in 24h.
-5. **Hinglish-aware messaging** — customers with a Hinglish preference get a
+6. **Hinglish-aware messaging** — customers with a Hinglish preference get a
    natural Hinglish nudge, not a stiff translated one.
-6. **A real, logged, gracefully handled failure** — ~15% of the synthetic
+7. **A real, logged, gracefully handled failure** — ~15% of the synthetic
    batch has an invalid phone number on purpose, and the agent catches that
    send failure, logs it, and moves on instead of crashing.
+
+## Connecting real Razorpay test-mode API keys (optional but recommended)
+
+1. Get free test-mode keys: dashboard.razorpay.com → **Settings → API Keys
+   → Generate Test Key** (personal PAN is fine if you're not a registered
+   business — the signup form explicitly allows this).
+2. Copy `.env.example` to `.env` in the project root:
+   ```bash
+   cp .env.example .env
+   ```
+3. Fill in your `RAZORPAY_KEY_ID` and `RAZORPAY_KEY_SECRET` in `.env`.
+   This file is git-ignored — it never gets committed.
+4. Run the backend as normal. The dashboard's "Live Razorpay links
+   created" stat will show a non-zero count, and each audit row's
+   payment link will be marked `(live Razorpay API)` instead of `(mock)`.
+
+Without keys configured, everything still runs — it just falls back to
+mock links, clearly labelled as such in the audit trail.
 
 ## Architecture
 
@@ -107,17 +136,21 @@ See `outputs/scorecard.md` for the full breakdown after running.
 ## What's mocked vs. real
 
 - Payment/checkout data is synthetic (`data/generate_data.py`) — built to
-  mirror realistic UPI failure modes rather than pull real merchant data.
-- WhatsApp/SMS sending is mocked in `agent/messenger.py` — the send function
-  is isolated so it can be swapped for a real WhatsApp Business API or
-  Razorpay Magic integration without touching diagnosis/policy logic.
+  mirror Razorpay's real error taxonomy (real `reason`/`source`/`step`
+  values) rather than pull real merchant data.
+- **Payment Links are real** when Razorpay test-mode API keys are
+  configured (see above) — a genuine test-mode Payment Link is created
+  via Razorpay's actual API, with a real `plink_...` id. Falls back to a
+  clearly labelled mock link otherwise.
+- WhatsApp/SMS sending is still mocked in `agent/messenger.py` — the send
+  function is isolated so it can be swapped for a real WhatsApp Business
+  API integration without touching diagnosis/policy logic.
 - Message text uses templates; swapping in an LLM call (e.g. Claude) for
   more natural, context-aware copy is a natural next step and the codebase
   is structured so that's a one-file change (`agent/messenger.py`).
 
 ## Next steps (if extended past the hackathon)
 
-- Real payment-link generation via Razorpay's test-mode Payment Links API
 - Real WhatsApp Business API integration
 - Replace template messages with an LLM call for more natural copy
 - A/B test discount thresholds against actual recovery outcomes

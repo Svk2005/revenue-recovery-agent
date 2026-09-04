@@ -12,9 +12,11 @@ import json
 
 FIELDS = [
     "checkout_id", "customer_name", "cart_value_inr", "failure_reason",
+    "source", "step",
     "recoverability_score", "diagnosis_explanation",
     "policy_action", "discount_pct", "policy_reasoning",
     "send_outcome", "message_sent", "recovered_value_inr",
+    "payment_link_id", "payment_link_live",
 ]
 
 

@@ -40,7 +40,7 @@ def decide_action(checkout: dict, diagnosis: dict) -> dict:
                           f"routed to a human instead of letting the agent guess.")
 
     # Decide message type based on failure reason
-    if reason == "wrong_vpa_entered":
+    if reason == "invalid_vpa":
         action = "send_corrected_payment_link"
     elif diagnosis["recommended_wait_hours"] > 0:
         action = "schedule_delayed_reminder"

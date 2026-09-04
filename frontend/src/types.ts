@@ -3,6 +3,8 @@ export interface AuditRow {
   customer_name: string
   cart_value_inr: number
   failure_reason: string
+  source: string
+  step: string
   recoverability_score: number
   diagnosis_explanation: string
   policy_action: string
@@ -11,6 +13,8 @@ export interface AuditRow {
   send_outcome: string
   message_sent: string
   recovered_value_inr: number
+  payment_link_id: string
+  payment_link_live: boolean
 }
 
 export interface BatchStats {
@@ -21,6 +25,7 @@ export interface BatchStats {
   send_failed_gracefully: number
   recovered_value_inr: number
   total_cart_value_inr: number
+  live_payment_links_created: number
 }
 
 export interface BatchResult {

@@ -1,35 +1,118 @@
 """
-Diagnosis layer.
+Diagnosis layer -- built directly on Razorpay's real, documented payment
+error schema (code / description / source / step / reason / metadata),
+not an invented taxonomy.
 
-Most "abandoned checkout" demos treat every failure the same
-("payment failed -> send reminder"). This module actually reasons
-about *why* a UPI/card payment failed and how recoverable it is,
-because the right recovery action is completely different for
-"bank server timeout" (just retry) vs "insufficient balance"
-(needs a delay + maybe a smaller basket) vs "user cancelled"
-(low odds, don't spam them).
+Reference: Razorpay's error response and error-reasons documentation.
+Every "reason" value below is a real, documented value Razorpay's API
+returns (razorpay.com/docs/payment-gateway/rainy-day/errors/). We map
+each one to a recoverability score and a plain-English explanation for
+our own downstream decisioning -- Razorpay documents the error, our
+diagnosis layer decides what it means for revenue recovery.
+
+Each profile also carries the real `source` (who/what caused it:
+customer, business, bank, gateway) and `step` (where in the payment
+flow it happened) fields, because those are what let a downstream
+system route the case correctly -- a `source: customer` failure needs
+a nudge to the customer; a `source: bank` failure needs a wait-and-retry,
+not an apology email.
 """
 
-# reason -> (recoverability 0-1, human explanation, suggested wait before retry hrs)
+# reason -> (recoverability 0-1, source, step, explanation, wait_hours)
 FAILURE_PROFILES = {
-    "bank_server_timeout":     (0.85, "Payment rail (NPCI/bank) timed out mid-transaction. Not the customer's fault.", 0),
-    "upi_app_crash":           (0.80, "Customer's UPI app crashed before confirming. Likely still wants to buy.", 0),
-    "network_drop":            (0.80, "Connectivity dropped during payment. Likely still wants to buy.", 0),
-    "otp_not_received":        (0.70, "OTP/SMS delivery was delayed. Customer probably still intends to pay.", 1),
-    "wrong_vpa_entered":       (0.55, "Customer mistyped their UPI ID. Needs a corrected/guided payment link, not a plain reminder.", 0),
-    "daily_limit_exceeded":    (0.50, "Bank-imposed daily UPI limit was hit. Won't succeed until limit resets.", 24),
-    "insufficient_balance":    (0.30, "Customer likely doesn't have funds right now.", 48),
-    "user_cancelled_mid_flow": (0.15, "Customer actively backed out. Low odds a reminder changes their mind.", 12),
+    "bank_technical_error": (
+        0.80, "bank", "payment_authorization",
+        "The issuing bank's core banking system hit a technical fault while processing the payment. Not the customer's fault.",
+        0,
+    ),
+    "gateway_technical_error": (
+        0.80, "gateway", "payment_authorization",
+        "A technical fault occurred at the payment gateway layer. Not the customer's fault.",
+        0,
+    ),
+    "issuer_technical_error": (
+        0.78, "bank", "payment_authorization",
+        "A technical fault at the card/UPI issuer interrupted authorization.",
+        0,
+    ),
+    "upi_app_technical_error": (
+        0.78, "gateway", "payment_authorization",
+        "The customer's UPI app (PSP) hit a technical error mid-payment.",
+        0,
+    ),
+    "payment_session_expired": (
+        0.70, "customer", "payment_initiation",
+        "The customer didn't complete the payment within the active session window.",
+        0,
+    ),
+    "payment_collect_request_expired": (
+        0.65, "customer", "payment_authentication",
+        "The UPI collect request expired before the customer approved it on their app.",
+        0,
+    ),
+    "incorrect_otp": (
+        0.65, "customer", "payment_authentication",
+        "The customer entered the wrong OTP during authentication.",
+        0,
+    ),
+    "otp_expired": (
+        0.65, "customer", "payment_authentication",
+        "The OTP expired before the customer could enter it.",
+        0,
+    ),
+    "invalid_vpa": (
+        0.55, "customer", "payment_initiation",
+        "The customer entered an invalid or unregistered UPI ID.",
+        0,
+    ),
+    "insufficient_funds": (
+        0.30, "customer", "payment_authorization",
+        "The customer's account didn't have enough balance at the time of the attempt.",
+        48,
+    ),
+    "transaction_daily_limit_exceeded": (
+        0.50, "bank", "payment_authorization",
+        "The customer hit their bank-imposed daily transaction limit.",
+        24,
+    ),
+    "card_declined": (
+        0.35, "bank", "payment_authorization",
+        "The issuing bank declined the card without sharing a specific reason.",
+        6,
+    ),
+    "payment_cancelled": (
+        0.15, "customer", "payment_authentication",
+        "The customer explicitly backed out before completing authentication.",
+        12,
+    ),
+    "payment_declined": (
+        0.20, "bank", "payment_authorization",
+        "The bank or gateway declined the payment for business or risk reasons not shared with Razorpay.",
+        6,
+    ),
 }
+
+# Fallback for any reason value not explicitly profiled above -- keeps the
+# pipeline safe if Razorpay's live API returns a reason we haven't mapped yet.
+_DEFAULT_PROFILE = (0.4, "unknown", "unknown", "Unrecognised failure reason from the payment API.", 6)
 
 
 def diagnose(checkout: dict) -> dict:
+    """
+    Expects checkout['failure_reason'] to be one of Razorpay's real,
+    documented `reason` values. Also accepts optional real `source` and
+    `step` fields if they were captured directly from a live API error
+    response (see backend/razorpay_client.py) -- falls back to our
+    profiled defaults if the checkout only carries a reason string.
+    """
     reason = checkout["failure_reason"]
-    recoverability, explanation, wait_hours = FAILURE_PROFILES.get(
-        reason, (0.4, "Unrecognised failure reason.", 6)
+    recoverability, default_source, default_step, explanation, wait_hours = FAILURE_PROFILES.get(
+        reason, _DEFAULT_PROFILE
     )
     return {
         "failure_reason": reason,
+        "source": checkout.get("source", default_source),
+        "step": checkout.get("step", default_step),
         "recoverability_score": recoverability,
         "explanation": explanation,
         "recommended_wait_hours": wait_hours,
