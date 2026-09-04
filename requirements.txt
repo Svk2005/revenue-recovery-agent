@@ -1,0 +1,6 @@
+# No external dependencies required for the core pipeline --
+# it runs on the Python 3.11+ standard library only.
+#
+# Optional, if you extend messenger.py to call a real LLM for
+# message generation instead of the built-in templates:
+# anthropic>=0.40.0
