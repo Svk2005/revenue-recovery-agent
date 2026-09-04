@@ -1,0 +1,41 @@
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-display: "Fraunces", serif;
+  --font-mono: "IBM Plex Mono", monospace;
+  --font-sans: "IBM Plex Sans", sans-serif;
+
+  --color-ink: #0b0d10;
+  --color-surface: #14171b;
+  --color-surface-raised: #191d22;
+  --color-line: #262b31;
+  --color-line-soft: #1c2025;
+  --color-paper: #edeef0;
+  --color-muted: #8b9198;
+  --color-brass: #c9a34e;
+  --color-brass-dim: #8a7038;
+  --color-recovered: #5fa579;
+  --color-failed: #c1554a;
+  --color-pending: #6b8fb0;
+}
+
+html {
+  background: var(--color-ink);
+}
+
+body {
+  background: var(--color-ink);
+  color: var(--color-paper);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: var(--color-brass);
+  color: var(--color-ink);
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}

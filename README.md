@@ -38,9 +38,41 @@ agent/audit.py          → every decision logged, nothing silently dropped
 agent/orchestrator.py   → ties it all together, one audit row per checkout
 run_agent.py            → CLI entrypoint
 report.py               → generates the scorecard below
+
+backend/main.py         → FastAPI wrapper exposing the same pipeline as
+                           POST /api/run and GET /api/last
+frontend/               → React + Vite + TypeScript + Tailwind dashboard
+                           (ledger-style UI, live against the backend)
 ```
 
 ## Run it
+
+### Option A — Web dashboard (recommended for demo)
+
+Two terminals, run from the project root.
+
+**Terminal 1 — backend (FastAPI):**
+```bash
+pip install -r backend/requirements.txt
+uvicorn backend.main:app --reload --port 8000
+```
+
+**Terminal 2 — frontend (React + Vite):**
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Open the URL Vite prints (usually `http://localhost:5173`). Click **Run new
+batch** to generate a fresh synthetic batch and watch the agent process it
+live — recovered-value figure, outcome breakdown, failure-reason breakdown,
+and a filterable, expandable audit trail table.
+
+The frontend dev server proxies `/api/*` to the backend on port 8000
+(configured in `frontend/vite.config.ts`), so both need to be running.
+
+### Option B — Command line only
 
 ```bash
 python data/generate_data.py --n 40 --out data/checkouts.json
