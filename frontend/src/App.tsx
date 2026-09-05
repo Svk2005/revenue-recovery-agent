@@ -47,7 +47,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-ink">
-      <div className="max-w-3xl mx-auto px-6 py-14">
+      <div className="max-w-6xl mx-auto px-4 sm:px-8 lg:px-12 py-8 sm:py-14">
         <header className="flex items-start justify-between mb-12 gap-4 flex-wrap">
           <div>
             <div className="text-muted text-sm mb-2">Razorpay Buildathon — Track 03</div>

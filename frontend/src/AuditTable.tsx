@@ -5,10 +5,12 @@ import { ChevronDown } from 'lucide-react'
 const FILTERS = [
   { key: 'all', label: 'All' },
   { key: 'sent', label: 'Sent' },
-  { key: 'failed_gracefully', label: 'Handled failures' },
-  { key: 'routed_to_human', label: 'Human review' },
+  { key: 'failed_gracefully', label: 'Handled' },
+  { key: 'routed_to_human', label: 'Human' },
   { key: 'skipped', label: 'Skipped' },
 ] as const
+
+const GRID_COLS = 'sm:grid-cols-[1.4fr_1fr_1.2fr_1fr_0.8fr_1fr_20px]'
 
 function outcomeColor(outcome: string) {
   if (outcome === 'sent') return 'text-recovered'
@@ -35,7 +37,7 @@ export function AuditTable({ rows }: { rows: AuditRow[] }) {
     <div>
       <div className="flex items-baseline justify-between mb-4 flex-wrap gap-2">
         <div className="text-muted text-sm">Audit trail</div>
-        <div className="flex gap-4 text-sm">
+        <div className="flex gap-3 sm:gap-4 text-xs sm:text-sm flex-wrap">
           {FILTERS.map((f) => (
             <button
               key={f.key}
@@ -53,7 +55,8 @@ export function AuditTable({ rows }: { rows: AuditRow[] }) {
       </div>
 
       <div className="border-t border-line">
-        <div className="grid grid-cols-[1.4fr_1fr_1.2fr_1fr_0.8fr_1fr_24px] gap-3 py-2 text-xs text-muted border-b border-line-soft">
+        {/* Column header row -- desktop only, hidden on mobile where rows stack instead */}
+        <div className={`hidden sm:grid ${GRID_COLS} gap-3 py-2 text-xs text-muted border-b border-line-soft`}>
           <span>Customer</span>
           <span className="text-right">Cart value</span>
           <span>Failure reason</span>
@@ -69,32 +72,44 @@ export function AuditTable({ rows }: { rows: AuditRow[] }) {
             <div key={row.checkout_id} className="border-b border-line-soft">
               <button
                 onClick={() => setExpanded(isOpen ? null : row.checkout_id)}
-                className="w-full grid grid-cols-[1.4fr_1fr_1.2fr_1fr_0.8fr_1fr_24px] gap-3 py-3 text-sm text-left items-center hover:bg-surface transition-colors"
+                className={`w-full grid grid-cols-1 ${GRID_COLS} gap-1 sm:gap-3 py-3 text-sm text-left sm:items-center hover:bg-surface transition-colors`}
               >
-                <span className="text-paper truncate">{row.customer_name}</span>
-                <span className="font-mono tabular text-right text-paper">
-                  ₹{Math.round(row.cart_value_inr).toLocaleString('en-IN')}
-                </span>
-                <span className="text-muted truncate">
+                {/* Mobile: name + value on one line */}
+                <div className="flex items-center justify-between sm:contents">
+                  <span className="text-paper truncate">{row.customer_name}</span>
+                  <span className="font-mono tabular text-right text-paper">
+                    ₹{Math.round(row.cart_value_inr).toLocaleString('en-IN')}
+                  </span>
+                </div>
+
+                <span className="hidden sm:inline text-muted truncate">
                   {row.failure_reason.replace(/_/g, ' ')}
                 </span>
-                <span className="text-muted truncate">
+                <span className="hidden sm:inline text-muted truncate">
                   {row.policy_action.replace(/_/g, ' ')}
                 </span>
-                <span className="font-mono tabular text-right text-muted">
+                <span className="hidden sm:inline font-mono tabular text-right text-muted">
                   {row.recoverability_score.toFixed(2)}
                 </span>
-                <span className={`text-xs ${outcomeColor(row.send_outcome)}`}>
-                  {outcomeLabel(row)}
-                </span>
+
+                {/* Mobile: reason/action/outcome condensed onto one line */}
+                <div className="flex items-center justify-between gap-2 sm:contents">
+                  <span className="sm:hidden text-muted text-xs truncate">
+                    {row.failure_reason.replace(/_/g, ' ')} · {row.policy_action.replace(/_/g, ' ')}
+                  </span>
+                  <span className={`text-xs whitespace-nowrap ${outcomeColor(row.send_outcome)}`}>
+                    {outcomeLabel(row)}
+                  </span>
+                </div>
+
                 <ChevronDown
                   size={14}
-                  className={`text-muted transition-transform justify-self-end ${isOpen ? 'rotate-180' : ''}`}
+                  className={`hidden sm:block text-muted transition-transform justify-self-end ${isOpen ? 'rotate-180' : ''}`}
                 />
               </button>
 
               {isOpen && (
-                <div className="pb-4 pl-1 pr-6 text-sm text-muted grid gap-2 max-w-2xl">
+                <div className="pb-4 pl-1 pr-2 sm:pr-6 text-sm text-muted grid gap-2 max-w-2xl">
                   <div>
                     <span className="text-paper">Diagnosis: </span>
                     {row.diagnosis_explanation}
@@ -109,13 +124,13 @@ export function AuditTable({ rows }: { rows: AuditRow[] }) {
                   {row.message_sent && (
                     <div>
                       <span className="text-paper">Message: </span>
-                      <span className="font-mono text-xs">{row.message_sent}</span>
+                      <span className="font-mono text-xs break-words">{row.message_sent}</span>
                     </div>
                   )}
                   {row.payment_link_id && (
                     <div>
                       <span className="text-paper">Payment link: </span>
-                      <span className="font-mono text-xs">{row.payment_link_id}</span>
+                      <span className="font-mono text-xs break-all">{row.payment_link_id}</span>
                       <span className={`text-xs ml-2 ${row.payment_link_live ? 'text-recovered' : 'text-muted'}`}>
                         {row.payment_link_live ? '(live Razorpay API)' : '(mock — no API keys configured)'}
                       </span>
