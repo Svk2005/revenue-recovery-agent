@@ -5,17 +5,20 @@ import { Hero } from './Hero'
 import { OutcomeBar } from './OutcomeBar'
 import { ReasonBreakdown } from './ReasonBreakdown'
 import { AuditTable } from './AuditTable'
+import { ConfirmationToasts } from './ConfirmationToasts'
 
 export default function App() {
   const [result, setResult] = useState<BatchResult | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [batchKey, setBatchKey] = useState(0)
 
   async function loadInitial() {
     try {
       const last = await getLast()
       if (last.rows.length > 0) {
         setResult(last)
+        setBatchKey((k) => k + 1)
         return
       }
     } catch {
@@ -30,6 +33,7 @@ export default function App() {
     try {
       const data = await runBatch(40)
       setResult(data)
+      setBatchKey((k) => k + 1)
     } catch (e) {
       setError(
         'Could not reach the backend. Make sure it is running: ' +
@@ -80,6 +84,7 @@ export default function App() {
 
         {result && (
           <>
+            <ConfirmationToasts rows={result.rows} batchKey={String(batchKey)} />
             <Hero stats={result.stats} />
             <OutcomeBar stats={result.stats} />
             <ReasonBreakdown rows={result.rows} />
