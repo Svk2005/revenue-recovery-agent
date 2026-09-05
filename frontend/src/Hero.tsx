@@ -6,26 +6,31 @@ function formatInr(n: number) {
 }
 
 export function Hero({ stats }: { stats: BatchStats }) {
-  const recovered = useCountUp(stats.recovered_value_inr)
+  const measured = useCountUp(stats.measured_recovered_value_inr)
   const rate = stats.total_cart_value_inr > 0
-    ? (stats.recovered_value_inr / stats.total_cart_value_inr) * 100
+    ? (stats.measured_recovered_value_inr / stats.total_cart_value_inr) * 100
     : 0
 
   return (
     <div className="border-b border-line pb-10 mb-10">
       <div className="flex items-baseline gap-3 mb-1">
-        <span className="text-muted text-sm">Estimated value recovered</span>
+        <span className="text-muted text-sm">Measured value recovered</span>
+        <span className="text-xs text-muted">(confirmed payments only)</span>
       </div>
       <div className="flex items-end gap-4 flex-wrap">
         <div
           className="font-display text-brass leading-none tabular"
           style={{ fontSize: 'clamp(3rem, 8vw, 5.5rem)', fontWeight: 500 }}
         >
-          ₹{formatInr(recovered)}
+          ₹{formatInr(measured)}
         </div>
         <div className="text-muted font-mono text-sm mb-2">
           {rate.toFixed(1)}% of batch
         </div>
+      </div>
+      <div className="text-xs text-muted mt-2">
+        vs. ₹{formatInr(stats.expected_recovered_value_inr)} expected (formula estimate) —{' '}
+        {stats.confirmed_payments} confirmed, {stats.pending_confirmation} still pending confirmation
       </div>
 
       <div className="flex flex-wrap gap-x-10 gap-y-3 mt-8 text-sm">
@@ -40,6 +45,17 @@ export function Hero({ stats }: { stats: BatchStats }) {
           value={stats.live_payment_links_created}
           accent={stats.live_payment_links_created > 0 ? "recovered" : undefined}
         />
+        <Stat
+          label={`Discount spend (cap ₹${formatInr(stats.batch_discount_cap_inr)})`}
+          value={`₹${formatInr(stats.total_discount_spent_inr)}`}
+        />
+        {stats.discounts_blocked_by_batch_cap > 0 && (
+          <Stat
+            label="Discounts blocked by batch cap"
+            value={stats.discounts_blocked_by_batch_cap}
+            accent="pending"
+          />
+        )}
       </div>
     </div>
   )

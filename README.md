@@ -116,9 +116,11 @@ Outputs land in `outputs/`:
 ## Sample result (40-checkout synthetic batch)
 
 - **Checkouts processed:** 40
-- **Total cart value in batch:** ₹125,530.87
-- **Estimated value recovered:** ₹28,746.69 (~22.9% of batch)
-- **Outcomes:** 21 sent · 8 failed gracefully (handled, logged) · 7 skipped (contact cap) · 4 routed to human review
+- **Total cart value in batch:** ₹176,255.53
+- **MEASURED value recovered:** ₹75,249.99 (42.7% of batch) — confirmed payments only
+- **Expected value recovered (formula estimate, for comparison):** ₹75,965.81
+- **Confirmed payments:** 11 · **Pending confirmation:** 11
+- **Outcomes:** 22 sent · 4 failed gracefully (handled, logged) · 8 skipped (contact cap) · 6 routed to human review
 
 See `outputs/scorecard.md` for the full breakdown after running.
 
@@ -127,11 +129,22 @@ See `outputs/scorecard.md` for the full breakdown after running.
 > "Don't just identify the problem. Show measured money recovered across a
 > batch, with compliant escalation, stopping rules, and an audit trail."
 
-- **Measured money recovered** → `recovered_value_inr` per row + batch total in the scorecard
-- **Stopping rules** → 24h contact cap, confidence gate, 50%-of-cart-value discount ceiling
+- **Measured money recovered** → `measured_recovered_value_inr` is a genuinely
+  distinct, simulated-outcome figure (see `agent/confirmation.py`), not the
+  same formula echoed twice — it differs from `expected_recovered_value_inr`
+  in every real run, exactly like a real business's actual vs. forecast
+  recovery would.
+- **Stopping rules** → 24h contact cap, confidence gate, per-case 50%-of-cart-value
+  discount ceiling, **and** a batch-wide discount spend cap (4% of total batch
+  value — see `agent/orchestrator.py`) that blocks further discounting once
+  the batch-wide budget is spent, even if every individual case is within
+  its own limit.
 - **Compliant escalation** → low-confidence cases routed to human review, not auto-actioned
 - **Audit trail** → `outputs/audit_trail.csv`, one row per checkout, reasoning included
 - **One failure handled gracefully** → invalid-contact send failures are caught and logged, not crashed on
+- **Automated tests** → `tests/test_policy.py` and `tests/test_orchestrator.py`
+  directly assert every stopping rule above actually holds (11 tests, all
+  passing) — run with `pytest tests/ -v`.
 
 ## What's mocked vs. real
 
@@ -142,6 +155,13 @@ See `outputs/scorecard.md` for the full breakdown after running.
   configured (see above) — a genuine test-mode Payment Link is created
   via Razorpay's actual API, with a real `plink_...` id. Falls back to a
   clearly labelled mock link otherwise.
+- **Payment confirmation is simulated** (`agent/confirmation.py`) — in test
+  mode nobody actually clicks through and pays a Payment Link, so a real
+  webhook-based confirmation loop would always report zero recovered. This
+  is explicitly labelled as a simulation everywhere it surfaces (dashboard,
+  audit trail, README) rather than silently presented as real. Swapping in
+  a real confirmation is a one-function change (check
+  `payment_link.fetch(id)["status"] == "paid"` instead).
 - WhatsApp/SMS sending is still mocked in `agent/messenger.py` — the send
   function is isolated so it can be swapped for a real WhatsApp Business
   API integration without touching diagnosis/policy logic.
@@ -149,8 +169,18 @@ See `outputs/scorecard.md` for the full breakdown after running.
   more natural, context-aware copy is a natural next step and the codebase
   is structured so that's a one-file change (`agent/messenger.py`).
 
+## Running the tests
+
+```bash
+pip install -r backend/requirements.txt
+pytest tests/ -v
+```
+11 tests covering the confidence gate, contact cap, per-case and batch-wide
+discount ceilings, and that every checkout produces exactly one audit row.
+
 ## Next steps (if extended past the hackathon)
 
 - Real WhatsApp Business API integration
 - Replace template messages with an LLM call for more natural copy
+- Real payment confirmation via Razorpay webhooks instead of simulation
 - A/B test discount thresholds against actual recovery outcomes

@@ -15,7 +15,8 @@ FIELDS = [
     "source", "step",
     "recoverability_score", "diagnosis_explanation",
     "policy_action", "discount_pct", "policy_reasoning",
-    "send_outcome", "message_sent", "recovered_value_inr",
+    "send_outcome", "message_sent", "payment_status",
+    "expected_recovered_value_inr", "measured_recovered_value_inr",
     "payment_link_id", "payment_link_live",
 ]
 

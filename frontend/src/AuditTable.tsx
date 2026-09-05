@@ -17,8 +17,12 @@ function outcomeColor(outcome: string) {
   return 'text-muted'
 }
 
-function outcomeLabel(outcome: string) {
-  return outcome.replace(/_/g, ' ')
+function outcomeLabel(row: AuditRow) {
+  const base = row.send_outcome.replace(/_/g, ' ')
+  if (row.send_outcome === 'sent' && row.payment_status) {
+    return `${base} · ${row.payment_status}`
+  }
+  return base
 }
 
 export function AuditTable({ rows }: { rows: AuditRow[] }) {
@@ -81,7 +85,7 @@ export function AuditTable({ rows }: { rows: AuditRow[] }) {
                   {row.recoverability_score.toFixed(2)}
                 </span>
                 <span className={`text-xs ${outcomeColor(row.send_outcome)}`}>
-                  {outcomeLabel(row.send_outcome)}
+                  {outcomeLabel(row)}
                 </span>
                 <ChevronDown
                   size={14}
@@ -117,11 +121,16 @@ export function AuditTable({ rows }: { rows: AuditRow[] }) {
                       </span>
                     </div>
                   )}
-                  {row.recovered_value_inr > 0 && (
+                  {row.expected_recovered_value_inr > 0 && (
                     <div>
-                      <span className="text-paper">Recovered value: </span>
-                      <span className="font-mono text-recovered">
-                        ₹{Math.round(row.recovered_value_inr).toLocaleString('en-IN')}
+                      <span className="text-paper">Expected value (estimate): </span>
+                      <span className="font-mono text-muted">
+                        ₹{Math.round(row.expected_recovered_value_inr).toLocaleString('en-IN')}
+                      </span>
+                      <span className="text-paper ml-4">Measured value: </span>
+                      <span className={`font-mono ${row.payment_status === 'confirmed' ? 'text-recovered' : 'text-muted'}`}>
+                        ₹{Math.round(row.measured_recovered_value_inr).toLocaleString('en-IN')}
+                        {row.payment_status === 'pending' && ' (pending confirmation)'}
                       </span>
                     </div>
                   )}
